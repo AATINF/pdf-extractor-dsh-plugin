@@ -11,12 +11,12 @@
 | `extract_pages` | 从 PDF 提取指定页面为新文件 | "提取 report.pdf 第 3-5 页" |
 | `split_pdf` | 将 PDF 拆分为单页 ZIP 包 | "把合同拆成每页一个文件" |
 | `merge_pdfs` | 将多个 PDF 按序合并为一个 | "合并 invoice1.pdf 和 invoice2.pdf" |
-| `rotate_pdf` | 将指定页面旋转 90°/180°/270° | "把第 2 页转正"
+| `rotate_pages` | 将指定页面旋转 90°/180°/270° | "把第 2 页转正" |
 
 ## 使用前提
 
 1. 用户本地有 Python 3.11+ 环境
-2. 已安装依赖：`pip install pdf-lib pypdf`
+2. 已安装依赖：`pip install pypdf`
 3. 待处理的 PDF 文件在当前工作区（或提供绝对路径）
 
 ## 调用方式
@@ -27,7 +27,7 @@
 - 提取 → `extract_pages`
 - 拆分 → `split_pdf`
 - 合并 → `merge_pdfs`
-- 旋转 → `rotate_pdf`
+- 旋转 → `rotate_pages`
 
 ### Step 2：确认参数
 - **input_path**：源 PDF 路径（必填）
