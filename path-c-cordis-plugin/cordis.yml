@@ -1,0 +1,12 @@
+# PDF Extractor DSH Plugin — Cordis 挂载配置
+#
+# 使用方式（开发模式）：
+#   cd <deepseek-harness 仓库根目录>
+#   pnpm dsh web --patch /absolute/path/to/this/cordis.yml
+#
+# 使用方式（安装到已有实例）：
+#   dsh plugin --profile web add link:/absolute/path/to/parent/directory
+
+insert:
+  - id: pdf-extractor-tool
+    name: ./src/pdf-tool.ts
