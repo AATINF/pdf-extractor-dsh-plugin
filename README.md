@@ -29,10 +29,14 @@
 
 | 工具 | 功能 | 关键参数 |
 |---|---|---|
-| `extract_pages` | 提取指定页面为新 PDF | `input_path`、`pages`、`output_path?`、`password?` |
-| `split_pdf` | 每页拆分为独立 PDF，打包 ZIP | `input_path`、`output_dir?`、`password?` |
+| `extract_pages` | 提取指定页面为新 PDF | `input_path`、`pages`、`output_path?`、`password?`(仅 A) |
+| `split_pdf` | 每页拆分为独立 PDF，打包 ZIP | `input_path`、`output_dir?`、`password?`(仅 A) |
 | `merge_pdfs` | 按序合并多个 PDF | `input_paths[]`、`output_path?` |
-| `rotate_pages` | 旋转指定页面 90°/180°/270° | `input_path`、`pages`、`degrees?`、`output_path?`、`password?` |
+| `rotate_pages` | 旋转指定页面 90°/180°/270° | `input_path`、`pages`、`degrees?`、`output_path?`、`password?`(仅 A) |
+
+> **加密 PDF 支持差异**：`password` 参数**仅 Path A 可用**（pypdf 原生支持密码解密）。Path B/C 基于 pdf-lib，**不支持密码解密**——遇到加密 PDF 会返回 `EncryptedPDFError` 并提示先解密（或改用 Path A）。
+>
+> **默认输出位置**：未指定 `output_path` 时，输出文件默认保存到**源文件同目录**（merge 为第一个输入文件同目录）。
 
 ---
 
@@ -201,7 +205,7 @@ python path-a-skill/pdf_tool.py extract --input sample.pdf --pages "1"
 | link 安装成功但工具没出现 | ① 插件包 package.json 需含 `"dsh": {"bundle": {"patch": "./cordis.yml"}}`；② cordis.yml 的 name 需为 file:// 绝对路径（未改则插件不加载） |
 | 如何让 DSH 接入 Path B（MCP） | 在启动配置里声明 `@deepseek-ai/dsh-mcp-client` 插件实例（见 Path B 章节的 cordis.yml 示例），工具名带 `mcp__pdf__` 前缀 |
 | 报 `UNSUPPORTED_SCHEMA` | `output.schema` 的 object 类型缺少 `additionalProperties: true/false` |
-| 文件加密打不开 | 用 `--password` / `password` 参数传入密码 |
+| 文件加密打不开 | Path A：用 `--password` 参数传入密码（pypdf 支持）；Path B/C：pdf-lib 不支持密码解密，返回 `EncryptedPDFError`，请先解密或用 Path A |
 | 页码超出范围 | 工具返回 `PageOutOfRangeError` 并给出有效范围 `1-N` |
 | 能不能处理超大文件？ | 纯本地处理，内存占用与页数成正比；超大文件（>100MB）建议拆分处理 |
 
