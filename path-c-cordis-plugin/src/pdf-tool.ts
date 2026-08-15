@@ -78,34 +78,29 @@ export function apply(ctx: Context) {
           type: "string",
           description: "输出文件路径（可选，默认自动生成）",
         },
-        password: {
-          type: "string",
-          description: "PDF 密码（如加密）",
-        },
       },
       output: {
         schema: { type: "object", additionalProperties: true },
-        render: (_args, value) => [
+        render: (_args: any, value: any) => [
           {
             type: "text",
             text: typeof value === "string" ? value : JSON.stringify(value, null, 2),
           },
         ],
       },
-      async execute(args, exec) {
+      async execute(args: any, exec: any) {
         try {
           const data = await fs.readFile(args.input_path, { signal: exec.signal });
           let srcDoc: PDFDocument;
           try {
-            srcDoc = await PDFDocument.load(data, {
-              password: args.password || undefined,
-            });
+            srcDoc = await PDFDocument.load(data);
           } catch (e: any) {
-            if (e.message?.includes("password")) {
+            if (e.message?.toLowerCase().includes("encrypt")) {
               return {
                 success: false,
-                error: "PasswordRequiredError",
-                message: "该 PDF 已加密，请提供 password 参数",
+                error: "EncryptedPDFError",
+                message:
+                  "该 PDF 已加密。Path C 基于 pdf-lib，不支持密码解密，请先解密后再处理（Path A 基于 pypdf，支持 --password 参数）。",
               };
             }
             throw e;
@@ -170,24 +165,30 @@ export function apply(ctx: Context) {
           type: "string",
           description: "输出目录（可选，默认源文件同目录）",
         },
-        password: {
-          type: "string",
-          description: "PDF 密码",
-        },
       },
       output: {
         schema: { type: "object", additionalProperties: true },
-        render: (_args, value) => [
+        render: (_args: any, value: any) => [
           { type: "text", text: JSON.stringify(value, null, 2) },
         ],
       },
-      async execute(args, exec) {
+      async execute(args: any, exec: any) {
         try {
           const JSZip = (await import("jszip")).default;
           const data = await fs.readFile(args.input_path, { signal: exec.signal });
-          const srcDoc = await PDFDocument.load(data, {
-            password: args.password || undefined,
-          });
+          let srcDoc: PDFDocument;
+          try {
+            srcDoc = await PDFDocument.load(data);
+          } catch (e: any) {
+            if (e.message?.toLowerCase().includes("encrypt")) {
+              return {
+                success: false,
+                error: "EncryptedPDFError",
+                message: "该 PDF 已加密。Path C 不支持密码解密，请先解密或用 Path A（pypdf，支持 --password）处理。",
+              };
+            }
+            throw e;
+          }
           const total = srcDoc.getPageCount();
           const stem = path.basename(
             args.input_path,
@@ -247,11 +248,11 @@ export function apply(ctx: Context) {
       },
       output: {
         schema: { type: "object", additionalProperties: true },
-        render: (_args, value) => [
+        render: (_args: any, value: any) => [
           { type: "text", text: JSON.stringify(value, null, 2) },
         ],
       },
-      async execute(args, exec) {
+      async execute(args: any, exec: any) {
         try {
           const merged = await PDFDocument.create();
           let total = 0;
@@ -268,7 +269,9 @@ export function apply(ctx: Context) {
             total += count;
           }
 
-          const outPath = args.output_path || "merged_output.pdf";
+          const outPath =
+            args.output_path ||
+            defaultOutput((args.input_paths as string[])[0], "_merged.pdf");
           const bytes = await merged.save();
           await fs.writeFile(outPath, bytes, { signal: exec.signal });
 
@@ -318,24 +321,37 @@ export function apply(ctx: Context) {
           type: "string",
           description: "输出路径（可选）",
         },
-        password: {
-          type: "string",
-          description: "PDF 密码",
-        },
       },
       output: {
         schema: { type: "object", additionalProperties: true },
-        render: (_args, value) => [
+        render: (_args: any, value: any) => [
           { type: "text", text: JSON.stringify(value, null, 2) },
         ],
       },
-      async execute(args, exec) {
+      async execute(args: any, exec: any) {
         try {
           const deg = args.degrees || 90;
+          if (![90, 180, 270].includes(deg)) {
+            return {
+              success: false,
+              error: "InvalidDegreesError",
+              message: `degrees 必须是 90/180/270，收到 ${deg}`,
+            };
+          }
           const data = await fs.readFile(args.input_path, { signal: exec.signal });
-          const srcDoc = await PDFDocument.load(data, {
-            password: args.password || undefined,
-          });
+          let srcDoc: PDFDocument;
+          try {
+            srcDoc = await PDFDocument.load(data);
+          } catch (e: any) {
+            if (e.message?.toLowerCase().includes("encrypt")) {
+              return {
+                success: false,
+                error: "EncryptedPDFError",
+                message: "该 PDF 已加密。Path C 不支持密码解密，请先解密或用 Path A（pypdf，支持 --password）处理。",
+              };
+            }
+            throw e;
+          }
           const total = srcDoc.getPageCount();
           const indices = parsePages(args.pages, total);
 
