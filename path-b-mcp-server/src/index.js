@@ -7,17 +7,14 @@
  *
  * 运行方式:
  *   node src/index.js          # stdio 模式（默认，DSH 直连）
- *   node src/index.js --sse    # SSE 模式（远程连接）
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
-import { PDFDocument, degrees } from "pdf-lib";
-import pdfParse from "pdf-parse";
+import { PDFDocument, degrees as pdfDegrees } from "pdf-lib";
 
 // ─── 工具定义 ─────────────────────────────────────────────
 
@@ -50,12 +47,6 @@ function parsePages(spec, total) {
     }
   }
   return [...new Set(result)].sort((a, b) => a - b);
-}
-
-/** 读取 PDF 文件 */
-async function readPdf(filePath) {
-  const data = await fs.promises.readFile(filePath);
-  return pdfParse(data);
 }
 
 // ─── Tool 1: 提取指定页面 ──────────────────────────────────
@@ -151,6 +142,7 @@ server.tool(
 
       const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
       const zipPath = path.join(outDir, `${stem}_split.zip`);
+      await fs.promises.mkdir(outDir, { recursive: true });
       await fs.promises.writeFile(zipPath, zipBuffer);
 
       const sizeKB = Math.round(zipBuffer.length / 1024 * 10) / 10;
@@ -242,7 +234,7 @@ server.tool(
 
       for (const idx of pageIndices) {
         const page = srcDoc.getPage(idx);
-        page.setRotation(degrees(degrees));
+        page.setRotation(pdfDegrees(degrees));
       }
 
       const outPath = output_path || defaultOutput(input_path, `_旋转${degrees}度.pdf`);
@@ -278,21 +270,7 @@ function defaultOutput(inputPath, suffix) {
   return path.join(dir, `${stem}${suffix}`);
 }
 
-// ─── 启动服务器 ────────────────────────────────────────────
+// ─── 启动服务器（stdio 模式，DSH 标准连接方式）─────────────
 
-const args = process.argv.slice(2);
-
-if (args.includes("--sse")) {
-  // SSE 模式（用于远程连接）
-  const port = parseInt(process.env.MCP_PORT || "3000", 10);
-  const transport = new SSEServerTransport("/message");
-  
-  // 需要用 http server 包装，这里简化为提示
-  console.error(`[pdf-extractor-mcp] SSE mode requires HTTP server wrapper.`);
-  console.error(`For DSH integration, use stdio mode instead.`);
-  process.exit(1);
-} else {
-  // stdio 模式（DSH 默认连接方式）
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
+const transport = new StdioServerTransport();
+await server.connect(transport);
