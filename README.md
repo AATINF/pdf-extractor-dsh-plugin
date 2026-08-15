@@ -50,10 +50,9 @@ python path-a-skill/pdf_tool.py extract --input your.pdf --pages "1-3"
 # Path B：MCP Server（任意 MCP 客户端可接）
 cd path-b-mcp-server && npm install && node src/index.js
 
-# Path C：DSH 原生插件（需要 DSH 源码仓库，详见 Path C 章节）
-#   cp -r path-c-cordis-plugin <DSH仓库>/scratch-plugin-pdf && cd scratch-plugin-pdf && npm install
-#   修改 cordis.yml 的 name 为 file:// 绝对路径后：
-#   pnpm dsh web --patch ./scratch-plugin-pdf/cordis.yml
+# Path C：DSH 原生插件（一行 npm 安装，无需 DSH 源码）
+dsh plugin --profile web add pdf-extractor-dsh-plugin
+#   然后正常启动 DSH（pnpm dsh web），4 个工具自动注册，开箱即用
 ```
 
 > 想快速体验完整功能？准备一个 PDF，按上面任一命令运行即可。三条路径提供相同的 4 个工具。
@@ -142,23 +141,28 @@ DSH 的 MCP 接入不是可视化配置，而是在启动配置里声明 MCP ser
 
 | 工具名 | 功能 | 参数 |
 |---|---|---|
-| `extract_pages` | 从 PDF 提取指定页面 | `input_path`, `pages`, `output_path?`, `password?` |
-| `split_pdf` | 拆分为单页 ZIP | `input_path`, `output_dir?`, `password?` |
+| `extract_pages` | 从 PDF 提取指定页面 | `input_path`, `pages`, `output_path?` |
+| `split_pdf` | 拆分为单页 ZIP | `input_path`, `output_dir?` |
 | `merge_pdfs` | 合并多个 PDF | `input_paths[]`, `output_path?` |
-| `rotate_pages` | 旋转指定页面 | `input_path`, `pages`, `degrees?`, `output_path?`, `password?` |
+| `rotate_pages` | 旋转指定页面 | `input_path`, `pages`, `degrees?`, `output_path?` |
 
 ---
 
 ## Path C：Cordis Tool Plugin（原生 DSH 插件）
 
-用 TypeScript 编写的原生 DSH 插件，注册为一等工具，完整接入 DSH 的审批门、沙箱隔离与日志回放。
+用 TypeScript 编写的原生 DSH 插件，注册为一等工具，完整接入 DSH 的审批门、沙箱隔离与日志回放。**已发布到 npm，一行安装即用。**
 
-### 前置条件
-- Node.js ≥ 22.19
-- 已安装 **DSH 源码仓库**（插件依赖 DSH monorepo 内部包 `@deepseek-ai/cordis` / `@deepseek-ai/dsh-tools`）
-- 插件目录内的第三方依赖：`pdf-lib`、`jszip`
+### 方法一：npm 安装（⭐ 推荐，最简，无需 DSH 源码仓库）
 
-### 方法一：patch 挂载（推荐，开发/自用）
+```bash
+dsh plugin --profile web add pdf-extractor-dsh-plugin
+```
+
+安装后正常启动 DSH（`pnpm dsh web`），4 个工具自动注册。**无需修改任何配置**——包内 bundle 已内置（`dsh.bundle` → `cordis.npm.yml`，entry 用包名解析）。卸载：`dsh plugin --profile web remove pdf-extractor-dsh-plugin`。
+
+> 需要 DSH 支持 `dsh plugin` 命令（DSH 源码部署或已安装 DSH CLI）。
+
+### 方法二：patch 挂载（开发/自用，需 DSH 源码仓库）
 
 ```bash
 # 1.（一次性）把插件放入 DSH 源码仓库内，并安装其依赖
@@ -174,13 +178,13 @@ cd ..
 pnpm dsh web --patch ./scratch-plugin-pdf/cordis.yml
 ```
 
-### 方法二：link 安装到已有实例（已实测）
+### 方法三：link 安装到已有实例（已实测）
 
 ```bash
 dsh plugin --profile web add link:<本仓库绝对路径>/path-c-cordis-plugin
 ```
 
-> 实测说明：`link:` 安装本身可用（pnpm 层面安装成功），且插件包的 `dsh.bundle` 声明需为对象格式（`"dsh": {"bundle": {"patch": "./cordis.yml"}}`）才能被 DSH 识别为 profile 层。安装后仍需按方法一修改 `cordis.yml` 的 `name` 为 file:// 绝对路径（link 与 patch 的路径解析基准都是 profile 目录，相对路径不可用）。未改动 name 前插件不会被加载。
+> 实测说明：`link:` 安装本身可用（pnpm 层面安装成功），且插件包的 `dsh.bundle` 声明需为对象格式（`"dsh": {"bundle": {"patch": "./cordis.yml"}}`）才能被 DSH 识别为 profile 层。安装后仍需按方法二修改 `cordis.yml` 的 `name` 为 file:// 绝对路径（link 与 patch 的路径解析基准都是 profile 目录，相对路径不可用）。未改动 name 前插件不会被加载。
 
 ### 挂载注意事项（实测验证，务必遵守）
 
@@ -260,7 +264,7 @@ Path A/B/C 的服务端实现**不依赖浏览器**，用本地库（pypdf / pdf
 - [x] Path A：DSH Skill（Python CLI）
 - [x] Path B：MCP Server（stdio）
 - [x] Path C：Cordis Tool Plugin（原生，已实测）
-- [ ] **发布 npm 包**：`pdf-extractor-dsh-plugin` 发布到 npm 后，即可 `dsh plugin --profile web add pdf-extractor-dsh-plugin` 一行安装（DSH 插件生态的标准分发方式）
+- [x] **发布 npm 包**：`pdf-extractor-dsh-plugin@1.1.1` 已发布到 npm —— `dsh plugin --profile web add pdf-extractor-dsh-plugin` 一行安装，开箱即用（已实测）
 
 ## License
 
