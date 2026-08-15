@@ -68,9 +68,15 @@ node src/index.js --sse  # 启动 SSE 模式（远程连接）
 用 TypeScript 编写的原生 DSH 插件，注册为一等工具，完整接入 DSH 基础设施。
 
 ```bash
-# 开发模式测试
-cd deepseek-harness  # DSH 源码仓库
-pnpm dsh web --patch ../pdf-extractor-dsh-plugin/path-c-cordis-plugin/cordis.yml
+# 开发模式测试（在 deepseek-harness 源码根目录）
+pnpm dsh web --patch ./path-c-cordis-plugin/cordis.yml
+```
+
+> **挂载注意事项（实测验证）**：
+> - `cordis.yml` 的插件 `name` 必须使用 `file:///` 形式的**绝对路径**——在 Windows 上写 `E:/...` 会被 ESM loader 当作 URL scheme 报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。请按你的本机部署路径修改该字段。
+> - `output.schema` 为 object 时**必须显式声明 `additionalProperties: true/false`**（DSH 运行时强制，否则 `UNSUPPORTED_SCHEMA`）。
+> - `execute` 必须返回与 `output.schema` 匹配的**对象**（返回 `JSON.stringify()` 字符串会被判为非法值）。
+> - 插件依赖 `@deepseek-ai/cordis` / `@deepseek-ai/dsh-tools`（DSH monorepo 内部包），**建议把插件放入 DSH 源码仓库内**（如 `scratch-plugin/`）再挂载，否则会 `Cannot find module`；第三方依赖（`pdf-lib`、`jszip`）在插件目录独立安装。
 
 # 或安装到已有 DSH 实例
 dsh plugin --profile web add link:/absolute/path/to/path-c-cordis-plugin
