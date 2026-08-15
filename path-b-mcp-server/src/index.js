@@ -58,17 +58,16 @@ server.tool(
     input_path: z.string().describe("输入 PDF 文件的绝对路径"),
     pages: z.string().describe('页码规格，如 "2-5", "1,3,8-10", "*" 表示全部'),
     output_path: z.string().optional().describe("输出文件路径（可选，默认自动生成）"),
-    password: z.string().optional().describe("PDF 密码（如加密）"),
   },
-  async ({ input_path, pages, output_path, password }) => {
+  async ({ input_path, pages, output_path }) => {
     try {
       const data = await fs.promises.readFile(input_path);
       let srcDoc;
       try {
-        srcDoc = await PDFDocument.load(data, { password: password || undefined });
+        srcDoc = await PDFDocument.load(data);
       } catch (e) {
-        if (e.message?.includes("password")) {
-          return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "PasswordRequiredError", message: "该 PDF 已加密，请提供 --password 参数" }) }] };
+        if (e.message?.toLowerCase().includes("encrypt")) {
+          return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "EncryptedPDFError", message: "该 PDF 已加密。Path B 基于 pdf-lib，不支持密码解密，请先解密后再处理（Path A 基于 pypdf，支持 --password 参数）。" }) }] };
         }
         throw e;
       }
@@ -119,14 +118,21 @@ server.tool(
   {
     input_path: z.string().describe("输入 PDF 文件的绝对路径"),
     output_dir: z.string().optional().describe("输出目录（可选，默认当前目录）"),
-    password: z.string().optional().describe("PDF 密码"),
   },
-  async ({ input_path, output_dir, password }) => {
+  async ({ input_path, output_dir }) => {
     try {
       // 动态 import JSZip（ESM）
       const { default: JSZip } = await import("jszip");
       const data = await fs.promises.readFile(input_path);
-      const srcDoc = await PDFDocument.load(data, { password: password || undefined });
+      let srcDoc;
+      try {
+        srcDoc = await PDFDocument.load(data);
+      } catch (e) {
+        if (e.message?.toLowerCase().includes("encrypt")) {
+          return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "EncryptedPDFError", message: "该 PDF 已加密。Path B 不支持密码解密，请先解密或用 Path A（pypdf，支持 --password）处理。" }) }] };
+        }
+        throw e;
+      }
       const totalPages = srcDoc.getPageCount();
       const stem = path.basename(input_path, path.extname(input_path));
       const outDir = output_dir || path.dirname(input_path);
@@ -188,7 +194,8 @@ server.tool(
         total += doc.getPageCount();
       }
 
-      const outPath = output_path || "merged_output.pdf";
+      // 默认输出到第一个输入文件同目录（与 extract/split/rotate 行为一致）
+      const outPath = output_path || defaultOutput(input_paths[0], "_merged.pdf");
       const pdfBytes = await merged.save();
       await fs.promises.writeFile(outPath, pdfBytes);
 
@@ -223,12 +230,22 @@ server.tool(
     pages: z.string().describe('要旋转的页码规格，如 "2,4" 或 "1-3"'),
     degrees: z.number().int().default(90).describe("旋转角度：90 | 180 | 270"),
     output_path: z.string().optional().describe("输出路径（可选）"),
-    password: z.string().optional().describe("PDF 密码"),
   },
-  async ({ input_path, pages, degrees = 90, output_path, password }) => {
+  async ({ input_path, pages, degrees = 90, output_path }) => {
     try {
+      if (![90, 180, 270].includes(degrees)) {
+        return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "InvalidDegreesError", message: `degrees 必须是 90/180/270，收到 ${degrees}` }) }] };
+      }
       const data = await fs.promises.readFile(input_path);
-      const srcDoc = await PDFDocument.load(data, { password: password || undefined });
+      let srcDoc;
+      try {
+        srcDoc = await PDFDocument.load(data);
+      } catch (e) {
+        if (e.message?.toLowerCase().includes("encrypt")) {
+          return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "EncryptedPDFError", message: "该 PDF 已加密。Path B 不支持密码解密，请先解密或用 Path A（pypdf，支持 --password）处理。" }) }] };
+        }
+        throw e;
+      }
       const totalPages = srcDoc.getPageCount();
       const pageIndices = parsePages(pages, totalPages);
 
