@@ -10,10 +10,10 @@
  * - 卸载时自动回滚，无残留状态
  *
  * 挂载方式：
- *   pnpm dsh web --patch ./cordis.yml
+ *   pnpm dsh web --patch <harness-root>/pdf-extractor-plugin/cordis.yml
  *
  * 或安装到已有 DSH 实例：
- *   dsh plugin --profile web add link:/absolute/path/to/path-c-cordis-plugin
+ *   dsh plugin --profile web add link:<harness-root>/pdf-extractor-plugin
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -73,17 +73,15 @@ export function apply(ctx: Context) {
         },
         output_path: {
           type: "string",
-          required: false,
           description: "输出文件路径（可选，默认自动生成）",
         },
         password: {
           type: "string",
-          required: false,
           description: "PDF 密码（如加密）",
         },
       },
       output: {
-        schema: { type: "object" },
+        schema: { type: "object", additionalProperties: true },
         render: (_args, value) => [
           {
             type: "text",
@@ -91,9 +89,9 @@ export function apply(ctx: Context) {
           },
         ],
       },
-      async execute(args) {
+      async execute(args, exec) {
         try {
-          const data = await fs.readFile(args.input_path);
+          const data = await fs.readFile(args.input_path, { signal: exec.signal });
           let srcDoc: PDFDocument;
           try {
             srcDoc = await PDFDocument.load(data, {
@@ -101,11 +99,11 @@ export function apply(ctx: Context) {
             });
           } catch (e: any) {
             if (e.message?.includes("password")) {
-              return JSON.stringify({
+              return {
                 success: false,
                 error: "PasswordRequiredError",
                 message: "该 PDF 已加密，请提供 password 参数",
-              });
+              };
             }
             throw e;
           }
@@ -114,12 +112,12 @@ export function apply(ctx: Context) {
           const indices = parsePages(args.pages, total);
 
           if (indices.length === 0) {
-            return JSON.stringify({
+            return {
               success: false,
               error: "PageOutOfRangeError",
               message: `页码 "${args.pages}" 超出范围（共 ${total} 页）`,
               valid_range: `1-${total}`,
-            });
+            };
           }
 
           const newDoc = await PDFDocument.create();
@@ -130,28 +128,24 @@ export function apply(ctx: Context) {
             args.output_path ||
             defaultOutput(args.input_path, `_第${args.pages}页.pdf`);
           const bytes = await newDoc.save();
-          await fs.writeFile(outPath, bytes);
+          await fs.writeFile(outPath, bytes, { signal: exec.signal });
 
-          return JSON.stringify(
-            {
-              success: true,
-              action: "extract",
-              input_file: args.input_path,
-              pages_selected: indices.map((i) => i + 1),
-              page_count: indices.length,
-              output_file: outPath,
-              size_kb: Math.round(bytes.length / 1024 * 10) / 10,
-              message: `已提取 ${indices.length} 页 → ${outPath}`,
-            },
-            null,
-            2
-          );
+          return {
+            success: true,
+            action: "extract",
+            input_file: args.input_path,
+            pages_selected: indices.map((i) => i + 1),
+            page_count: indices.length,
+            output_file: outPath,
+            size_kb: Math.round((bytes.length / 1024) * 10) / 10,
+            message: `已提取 ${indices.length} 页 → ${outPath}`,
+          };
         } catch (err: any) {
-          return JSON.stringify({
+          return {
             success: false,
             error: err.name || "Error",
             message: err.message,
-          });
+          };
         }
       },
     })
@@ -171,25 +165,23 @@ export function apply(ctx: Context) {
         },
         output_dir: {
           type: "string",
-          required: false,
           description: "输出目录（可选，默认源文件同目录）",
         },
         password: {
           type: "string",
-          required: false,
           description: "PDF 密码",
         },
       },
       output: {
-        schema: { type: "object" },
+        schema: { type: "object", additionalProperties: true },
         render: (_args, value) => [
           { type: "text", text: JSON.stringify(value, null, 2) },
         ],
       },
-      async execute(args) {
+      async execute(args, exec) {
         try {
           const JSZip = (await import("jszip")).default;
-          const data = await fs.readFile(args.input_path);
+          const data = await fs.readFile(args.input_path, { signal: exec.signal });
           const srcDoc = await PDFDocument.load(data, {
             password: args.password || undefined,
           });
@@ -210,27 +202,23 @@ export function apply(ctx: Context) {
 
           const buf = await zip.generateAsync({ type: "nodebuffer" });
           const zipPath = path.join(outDir, `${stem}_split.zip`);
-          await fs.writeFile(zipPath, buf);
+          await fs.writeFile(zipPath, buf, { signal: exec.signal });
 
-          return JSON.stringify(
-            {
-              success: true,
-              action: "split",
-              input_file: args.input_path,
-              total_pages: total,
-              output_file: zipPath,
-              size_kb: Math.round(buf.length / 1024 * 10) / 10,
-              message: `已拆分 ${total} 页 → ${zipPath}`,
-            },
-            null,
-            2
-          );
+          return {
+            success: true,
+            action: "split",
+            input_file: args.input_path,
+            total_pages: total,
+            output_file: zipPath,
+            size_kb: Math.round((buf.length / 1024) * 10) / 10,
+            message: `已拆分 ${total} 页 → ${zipPath}`,
+          };
         } catch (err: any) {
-          return JSON.stringify({
+          return {
             success: false,
             error: err.name || "Error",
             message: err.message,
-          });
+          };
         }
       },
     })
@@ -251,23 +239,22 @@ export function apply(ctx: Context) {
         },
         output_path: {
           type: "string",
-          required: false,
           description: "输出路径（可选，默认 merged_output.pdf）",
         },
       },
       output: {
-        schema: { type: "object" },
+        schema: { type: "object", additionalProperties: true },
         render: (_args, value) => [
           { type: "text", text: JSON.stringify(value, null, 2) },
         ],
       },
-      async execute(args) {
+      async execute(args, exec) {
         try {
           const merged = await PDFDocument.create();
           let total = 0;
 
           for (const fp of args.input_paths as string[]) {
-            const data = await fs.readFile(fp);
+            const data = await fs.readFile(fp, { signal: exec.signal });
             const doc = await PDFDocument.load(data);
             const count = doc.getPageCount();
             const pages = await merged.copyPages(
@@ -280,28 +267,24 @@ export function apply(ctx: Context) {
 
           const outPath = args.output_path || "merged_output.pdf";
           const bytes = await merged.save();
-          await fs.writeFile(outPath, bytes);
+          await fs.writeFile(outPath, bytes, { signal: exec.signal });
 
-          return JSON.stringify(
-            {
-              success: true,
-              action: "merge",
-              input_files: args.input_paths,
-              file_count: (args.input_paths as string[]).length,
-              total_pages: total,
-              output_file: outPath,
-              size_kb: Math.round(bytes.length / 1024 * 10) / 10,
-              message: `已合并 ${(args.input_paths as string[]).length} 个文件（${total} 页）→ ${outPath}`,
-            },
-            null,
-            2
-          );
+          return {
+            success: true,
+            action: "merge",
+            input_files: args.input_paths,
+            file_count: (args.input_paths as string[]).length,
+            total_pages: total,
+            output_file: outPath,
+            size_kb: Math.round((bytes.length / 1024) * 10) / 10,
+            message: `已合并 ${(args.input_paths as string[]).length} 个文件（${total} 页）→ ${outPath}`,
+          };
         } catch (err: any) {
-          return JSON.stringify({
+          return {
             success: false,
             error: err.name || "Error",
             message: err.message,
-          });
+          };
         }
       },
     })
@@ -326,30 +309,27 @@ export function apply(ctx: Context) {
         },
         degrees: {
           type: "number",
-          required: false,
           description: "旋转角度：90 | 180 | 270（默认 90）",
         },
         output_path: {
           type: "string",
-          required: false,
           description: "输出路径（可选）",
         },
         password: {
           type: "string",
-          required: false,
           description: "PDF 密码",
         },
       },
       output: {
-        schema: { type: "object" },
+        schema: { type: "object", additionalProperties: true },
         render: (_args, value) => [
           { type: "text", text: JSON.stringify(value, null, 2) },
         ],
       },
-      async execute(args) {
+      async execute(args, exec) {
         try {
           const deg = args.degrees || 90;
-          const data = await fs.readFile(args.input_path);
+          const data = await fs.readFile(args.input_path, { signal: exec.signal });
           const srcDoc = await PDFDocument.load(data, {
             password: args.password || undefined,
           });
@@ -364,28 +344,24 @@ export function apply(ctx: Context) {
             args.output_path ||
             defaultOutput(args.input_path, `_旋转${deg}度.pdf`);
           const bytes = await srcDoc.save();
-          await fs.writeFile(outPath, bytes);
+          await fs.writeFile(outPath, bytes, { signal: exec.signal });
 
-          return JSON.stringify(
-            {
-              success: true,
-              action: "rotate",
-              input_file: args.input_path,
-              pages_rotated: indices.map((i) => i + 1),
-              degrees: deg,
-              output_file: outPath,
-              size_kb: Math.round(bytes.length / 1024 * 10) / 10,
-              message: `已旋转 ${indices.length} 页（${deg}°）→ ${outPath}`,
-            },
-            null,
-            2
-          );
+          return {
+            success: true,
+            action: "rotate",
+            input_file: args.input_path,
+            pages_rotated: indices.map((i) => i + 1),
+            degrees: deg,
+            output_file: outPath,
+            size_kb: Math.round((bytes.length / 1024) * 10) / 10,
+            message: `已旋转 ${indices.length} 页（${deg}°）→ ${outPath}`,
+          };
         } catch (err: any) {
-          return JSON.stringify({
+          return {
             success: false,
             error: err.name || "Error",
             message: err.message,
-          });
+          };
         }
       },
     })
