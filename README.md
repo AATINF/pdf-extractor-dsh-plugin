@@ -3,90 +3,191 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DSH Plugin](https://img.shields.io/badge/DeepSeek%20Harness-Plugin-blue)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-green)](https://github.com/topics/dsh-plugin)
+[![Verified](https://img.shields.io/badge/Verified-DSH%20v0.1.0--rc.5%20%2F%20Windows-brightgreen)](https://github.com/AATINF/pdf-extractor-dsh-plugin)
 
-> 将 [PDF 页面提取器](https://github.com/AATINF/pdf-page-extractor) 的核心能力接入 **DeepSeek Harness (DSH)**，让 AI Agent 在对话中直接处理 PDF 文件——提取、拆分、合并、旋转，全部纯本地执行。
+> 将 [PDF 页面提取器](https://github.com/AATINF/pdf-page-extractor) 的核心能力接入 **DeepSeek Harness (DSH)**，让 AI Agent 在对话中直接处理 PDF 文件——提取、拆分、合并、旋转，全部**纯本地执行，文件不上传**。
 
-## 三条实现路径
+**实测信息**：已在 **DSH v0.1.0-rc.5 + Windows** 上完成验证，四种 agent 模式（标准 / 极简 / PTC / 创造）中的前三种均确认插件工具对 Agent 可见且可被真实调用。
 
-本仓库提供 **3 种集成方式**，从轻量到深度递进：
+---
+
+## 三条实现路径（从轻量到深度）
 
 | 路径 | 方式 | 复杂度 | 适用场景 |
 |---|---|---|---|
-| **[A. DSH Skill](path-a-skill/)** | SKILL.md + Python 包装脚本 | ⭐ 最低 | 快速验证，DSH 会话中直接调用 |
-| **[B. MCP Server](path-b-mcp-server/)** | Node.js MCP Server（标准协议） | ⭐⭐ 中等 | 通用 MCP 客户端均可对接 |
-| **[C. Cordis Tool Plugin](path-c-cordis-plugin/)** | 原生 TypeScript DSH 插件 | ⭐⭐⭐ 最高 | 深度集成，享受 DSH 审批门/沙箱/日志回放 |
+| **[A. DSH Skill](path-a-skill/)** | SKILL.md + Python CLI | ⭐ 最低 | 快速体验，DSH 会话中直接调用 |
+| **[B. MCP Server](path-b-mcp-server/)** | Node.js MCP Server（标准协议） | ⭐⭐ 中等 | 任何 MCP 客户端（DSH / Claude / Cursor…）均可对接 |
+| **[C. Cordis Tool Plugin](path-c-cordis-plugin/)** | 原生 TypeScript DSH 插件 | ⭐⭐⭐ 最高 | 深度集成，享受审批门 / 沙箱 / 日志回放 |
+
+三条路径都提供相同的 **4 个工具**：`extract_pages` / `split_pdf` / `merge_pdfs` / `rotate_pages`。
+
+---
+
+## 工具速查（三条路径通用）
+
+页码规格语法：`"5"`（单页）｜`"3-7"`（范围）｜`"1,3,5-8,10"`（组合）｜`"*"` 或 `"all"`（全部）
+
+| 工具 | 功能 | 关键参数 |
+|---|---|---|
+| `extract_pages` | 提取指定页面为新 PDF | `input_path`、`pages`、`output_path?`、`password?` |
+| `split_pdf` | 每页拆分为独立 PDF，打包 ZIP | `input_path`、`output_dir?`、`password?` |
+| `merge_pdfs` | 按序合并多个 PDF | `input_paths[]`、`output_path?` |
+| `rotate_pages` | 旋转指定页面 90°/180°/270° | `input_path`、`pages`、`degrees?`、`output_path?`、`password?` |
 
 ---
 
 ## Path A：DSH Skill（推荐入门）
 
-最轻量的方式。在 DSH 会话中加载 Skill 后，Agent 即可调用 PDF 工具。
+最轻量的方式，只需 Python 环境。DSH 会话中加载 Skill 后，Agent 即可按指令调用 PDF 工具。
+
+### 前置条件
+- Python 3.11+
+- `pip install pypdf`
+
+### 使用步骤
 
 ```bash
-# 在 DSH 会话中加载
-/load-skill path-a-skill/SKILL.md
+# 1.（一次性）安装依赖
+pip install pypdf
 
-# 然后 Agent 就能理解并调用：
-# "帮我把 report.pdf 的第 3-5 页提取出来"
-# "把这个合同拆成单页"
-# "合并 invoice1.pdf 和 invoice2.pdf"
+# 2. 把 SKILL.md 复制到 DSH 工作区（或在会话中直接指定路径加载）
+cp path-a-skill/SKILL.md <你的 DSH 工作区>/
 ```
 
-**核心文件**：
-- [`SKILL.md`](path-a-skill/SKILL.md) — 模型可读的能力描述与使用指南
-- [`pdf_tool.py`](path-a-skill/pdf_tool.py) — Python 封装脚本（调用 pdf-page-extractor 核心逻辑）
+3. 在 DSH 会话中加载并直接对话：
 
-**依赖**：Python 3.11+、pdf-lib、JSZip（或直接用子进程调浏览器）
+```
+/load-skill path-a-skill/SKILL.md
+"帮我把 report.pdf 的第 3-5 页提取出来"
+"把这个合同拆成每页一个文件"
+```
+
+Agent 会调用同目录的 `pdf_tool.py`：
+
+```bash
+python path-a-skill/pdf_tool.py extract --input report.pdf --pages "3-5"
+python path-a-skill/pdf_tool.py split   --input contract.pdf --output-dir ./output
+python path-a-skill/pdf_tool.py merge   --inputs a.pdf b.pdf c.pdf --output merged.pdf
+python path-a-skill/pdf_tool.py rotate  --input scan.pdf --pages "2,4" --degrees 90
+```
+
+### 核心文件
+- `path-a-skill/SKILL.md` — 模型可读的能力描述与使用指南
+- `path-a-skill/pdf_tool.py` — Python CLI（pypdf 实现），输出结构化 JSON 便于 Agent 解析
 
 ---
 
 ## Path B：MCP Server
 
-标准 MCP 协议实现，任何支持 MCP 的客户端（DSH / Claude / Cursor 等）均可连接。
+标准 MCP 协议实现，任何支持 MCP 的客户端均可连接。DSH 的模型设置中可添加 MCP Server 接入。
+
+### 使用步骤
 
 ```bash
 cd path-b-mcp-server
 npm install
-node src/index.js        # 启动 MCP Server（stdio 模式）
-# 或
-node src/index.js --sse  # 启动 SSE 模式（远程连接）
+node src/index.js        # 启动 MCP Server（stdio 模式，DSH 标准连接方式）
 ```
 
-**暴露的工具**：
+### 在 DSH 中接入
+在 DSH Web UI 的 **模型 / MCP 设置**中添加一条 MCP Server，命令为：
+
+```
+node <本仓库绝对路径>/path-b-mcp-server/src/index.js
+```
+
+连接后 Agent 即可调用 `extract_pages` / `split_pdf` / `merge_pdfs` / `rotate_pages` 四个工具。
+
+> 说明：本实现提供 stdio 传输（本地进程间通信，也是 DSH 的标准 MCP 接入方式）。
+> 如需远程访问，请通过 MCP 客户端自身的远程代理（如 `mcp-remote`）包装。
+
+### 暴露的工具
 
 | 工具名 | 功能 | 参数 |
 |---|---|---|
-| `extract_pages` | 从 PDF 提取指定页面 | `input_path`, `pages`, `output_path` |
-| `split_pdf` | 拆分为单页 ZIP | `input_path`, `output_dir` |
-| `merge_pdfs` | 合并多个 PDF | `input_paths`, `output_path` |
-| `rotate_page` | 旋转指定页面 | `input_path`, `pages`, `degrees`, `output_path` |
+| `extract_pages` | 从 PDF 提取指定页面 | `input_path`, `pages`, `output_path?`, `password?` |
+| `split_pdf` | 拆分为单页 ZIP | `input_path`, `output_dir?`, `password?` |
+| `merge_pdfs` | 合并多个 PDF | `input_paths[]`, `output_path?` |
+| `rotate_pages` | 旋转指定页面 | `input_path`, `pages`, `degrees?`, `output_path?`, `password?` |
 
 ---
 
 ## Path C：Cordis Tool Plugin（原生 DSH 插件）
 
-用 TypeScript 编写的原生 DSH 插件，注册为一等工具，完整接入 DSH 基础设施。
+用 TypeScript 编写的原生 DSH 插件，注册为一等工具，完整接入 DSH 的审批门、沙箱隔离与日志回放。
+
+### 前置条件
+- Node.js ≥ 22.19
+- 已安装 **DSH 源码仓库**（插件依赖 DSH monorepo 内部包 `@deepseek-ai/cordis` / `@deepseek-ai/dsh-tools`）
+- 插件目录内的第三方依赖：`pdf-lib`、`jszip`
+
+### 方法一：patch 挂载（推荐，开发/自用）
 
 ```bash
-# 开发模式测试（在 deepseek-harness 源码根目录）
-pnpm dsh web --patch ./path-c-cordis-plugin/cordis.yml
+# 1.（一次性）把插件放入 DSH 源码仓库内，并安装其依赖
+cd <deepseek-harness 源码根目录>
+cp -r <本仓库>/path-c-cordis-plugin ./scratch-plugin-pdf
+cd scratch-plugin-pdf && npm install          # 安装 pdf-lib / jszip（peer 依赖按 npm 提示处理）
+cd ..
+
+# 2. 修改 ./scratch-plugin-pdf/cordis.yml 中插件 name 的路径为你的本机绝对路径
+#    （必须是 file:// 形式，见下方注意事项）
+
+# 3. 启动
+pnpm dsh web --patch ./scratch-plugin-pdf/cordis.yml
 ```
 
-> **挂载注意事项（实测验证）**：
-> - `cordis.yml` 的插件 `name` 必须使用 `file:///` 形式的**绝对路径**——在 Windows 上写 `E:/...` 会被 ESM loader 当作 URL scheme 报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。请按你的本机部署路径修改该字段。
-> - `output.schema` 为 object 时**必须显式声明 `additionalProperties: true/false`**（DSH 运行时强制，否则 `UNSUPPORTED_SCHEMA`）。
-> - `execute` 必须返回与 `output.schema` 匹配的**对象**（返回 `JSON.stringify()` 字符串会被判为非法值）。
-> - 插件依赖 `@deepseek-ai/cordis` / `@deepseek-ai/dsh-tools`（DSH monorepo 内部包），**建议把插件放入 DSH 源码仓库内**（如 `scratch-plugin/`）再挂载，否则会 `Cannot find module`；第三方依赖（`pdf-lib`、`jszip`）在插件目录独立安装。
+### 方法二：link 安装到已有实例
 
-# 或安装到已有 DSH 实例
-dsh plugin --profile web add link:/absolute/path/to/path-c-cordis-plugin
+```bash
+dsh plugin --profile web add link:<本仓库绝对路径>/path-c-cordis-plugin
 ```
 
-**插件特性**：
+### 挂载注意事项（实测验证，务必遵守）
+
+- `cordis.yml` 的插件 `name` **必须使用 `file:///` 形式的绝对路径**——在 Windows 上直接写 `E:/...` 会被 ESM loader 当作 URL scheme 报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。请按你的本机部署路径修改。
+- `output.schema` 为 object 时**必须显式声明 `additionalProperties: true|false`**（DSH 运行时强制，否则报 `UNSUPPORTED_SCHEMA`）。
+- `execute` 必须返回与 `output.schema` 匹配的**对象**（返回 `JSON.stringify()` 字符串会被判为非法值）。
+- 插件依赖 DSH monorepo 内部包，**建议放在 DSH 源码仓库内**（如 `scratch-plugin/`）再挂载；第三方依赖（`pdf-lib`、`jszip`）在插件目录独立安装。
+- 开发期支持代码热重载；**新增插件行**后若未生效，重启会话即可（HMR 对新增行不保证热加载）。
+
+### 插件特性
 - 通过 `ctx.tools.register(defineTool(...))` 注册 4 个工具
 - 享受 DSH 的审批门（approval gate）、沙箱隔离、日志回放
 - 卸载时自动回滚，无残留状态
-- 支持 HMR 热更新（开发时改代码即生效）
+- 适配 DSH 全部 agent 模式：标准 / 极简（minimal）/ PTC（code）下工具均对 Agent 可见
+
+---
+
+## 快速开始（30 秒最小体验，Path A）
+
+```bash
+# 1. 准备一个测试 PDF（任选其一）
+curl -L -o sample.pdf "https://www.w3.org/WHO/PDF/HelloWorld.pdf"   # 或使用你自己的任意 PDF
+
+# 2. 安装依赖并直接调用
+pip install pypdf
+python path-a-skill/pdf_tool.py extract --input sample.pdf --pages "1"
+
+# 3. 输出：sample_第1页.pdf（同目录）
+```
+
+---
+
+## 常见问题（FAQ）
+
+| 问题 | 解答 |
+|---|---|
+| 提示 `Cannot find module '@deepseek-ai/cordis'` | Path C 插件必须放在 DSH 源码仓库内（能解析到 monorepo 内部包）再挂载 |
+| 报 `ERR_UNSUPPORTED_ESM_URL_SCHEME` | cordis.yml 的 name 用了 `E:/...` 裸路径，改为 `file:///E:/...` |
+| 报 `UNSUPPORTED_SCHEMA` | `output.schema` 的 object 类型缺少 `additionalProperties: true/false` |
+| 文件加密打不开 | 用 `--password` / `password` 参数传入密码 |
+| 页码超出范围 | 工具返回 `PageOutOfRangeError` 并给出有效范围 `1-N` |
+| 能不能处理超大文件？ | 纯本地处理，内存占用与页数成正比；超大文件（>100MB）建议拆分处理 |
+
+## 隐私说明
+
+所有处理均在本地完成，**PDF 文件不会上传到任何服务器**。Path A 使用本地 Python 库 pypdf；Path B/C 使用本地 Node.js 库 pdf-lib / jszip，全程无网络请求。
 
 ---
 
@@ -100,36 +201,22 @@ pdf-page-extractor          pdf-extractor-dsh-plugin
 │                  │         │  C. Cordis Plugin (原生)   │
 │  核心:           │         │                          │
 │  - PDF.js 解析   │ ←复刻── │  核心:                    │
-│  - pdf-lib 操作   │   逻辑   │  - pdf-lib (Node.js版)    │
-│  - JSZip 打包     │         │  - pdf-parse (解析)       │
+│  - pdf-lib 操作   │   逻辑   │  - pdf-lib (Node.js 版)   │
+│  - JSZip 打包     │         │  - pypdf (Python 版)      │
 └─────────────────┘         └──────────────────────────┘
      离线浏览器工具               Agent 运行时插件
 ```
 
-Path B/C 的服务端实现**不依赖浏览器**，用 Node.js 原生库（`pdf-lib` + `pdf-parse`）复刻了原项目的核心逻辑，可在无头环境中运行。
+Path A/B/C 的服务端实现**不依赖浏览器**，用本地库（pypdf / pdf-lib + jszip）复刻了原项目的核心逻辑，可在无头环境中运行。
 
 ---
 
-## 快速开始（最小体验）
+## Roadmap
 
-### 前提
-- Node.js ≥ 22 或 Python ≥ 3.11
-- 已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（仅 Path C 必需）
-
-### 30 秒体验 Path A
-```bash
-# 1. 下载原项目单文件版
-curl -L -o extractor.html https://github.com/AATINF/pdf-page-extractor/releases/latest/download/pdf-page-extractor.html
-
-# 2. 把本仓库的 SKILL.md 放入 DSH 工作区
-cp path-a-skill/SKILL.md ~/.dsh/workspace/
-
-# 3. 在 DSH 会话中加载并使用
-# /load-skill SKILL.md
-# "提取 extractor.html 的第 1,3,5 页"
-```
-
----
+- [x] Path A：DSH Skill（Python CLI）
+- [x] Path B：MCP Server（stdio）
+- [x] Path C：Cordis Tool Plugin（原生，已实测）
+- [ ] **发布 npm 包**：`pdf-extractor-dsh-plugin` 发布到 npm 后，即可 `dsh plugin --profile web add pdf-extractor-dsh-plugin` 一行安装（DSH 插件生态的标准分发方式）
 
 ## License
 
