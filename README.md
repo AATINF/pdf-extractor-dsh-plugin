@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DSH Plugin](https://img.shields.io/badge/DeepSeek%20Harness-Plugin-blue)](https://github.com/deepseek-ai/deepseek-harness)
+[![npm version](https://img.shields.io/npm/v/pdf-extractor-dsh-plugin)](https://www.npmjs.com/package/pdf-extractor-dsh-plugin)
+[![npm downloads](https://img.shields.io/npm/dm/pdf-extractor-dsh-plugin)](https://www.npmjs.com/package/pdf-extractor-dsh-plugin)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-green)](https://github.com/topics/dsh-plugin)
 [![Verified](https://img.shields.io/badge/Verified-DSH%20v0.1.0--rc.5%20%2F%20Windows-brightgreen)](https://github.com/AATINF/pdf-extractor-dsh-plugin)
 
@@ -236,6 +238,24 @@ python path-a-skill/pdf_tool.py extract --input sample.pdf --pages "1"
 ## 隐私说明
 
 所有处理均在本地完成，**PDF 文件不会上传到任何服务器**。Path A 使用本地 Python 库 pypdf；Path B/C 使用本地 Node.js 库 pdf-lib / jszip，全程无网络请求。
+
+---
+
+## 为什么它特别轻量？
+
+**核心代码只有约 370 行 TypeScript（Path C）/ 290 行 Python（Path A），依赖 1-2 个库，零浏览器、零服务端、零数据库组件。**
+
+| 维度 | 本插件 | 原项目（浏览器单文件） | 通用 PDF CLI（qpdf 等） | 在线 PDF 服务 |
+|---|---|---|---|---|
+| 安装体积 | A: 1 脚本 + pypdf（~1.5MB）；B/C: 2-4 个 npm 包 | 单 HTML（数 MB） | 二进制 ~10MB+ | 无需安装 |
+| 依赖数量 | A: 1 个；B: 4 个；C: 2 个 | 内置（体积大） | 0（但功能单薄） | 0 |
+| 是否需要浏览器/服务 | **否**（纯命令行/进程内） | 是（浏览器） | 否 | 是（远程服务） |
+| 文件是否离开本机 | **从不** | 从不 | 从不 | **上传到第三方** |
+| 内存占用 | 极低（按页流式处理） | 浏览器进程（高） | 中 | 取决于服务端 |
+| Agent 集成 | **原生一等公民**（DSH 工具 / MCP 协议） | 无（需人工操作） | 需自行封装为工具 | 需 API Key + 网络 |
+| 启动速度 | 即时（进程内/tsx 加载） | 打开浏览器数秒 | 即时 | 网络往返 |
+
+**适合谁**：需要让 AI Agent 在对话里直接、私密、零成本处理 PDF 的开发者——不想要重型依赖、不想上传文件、不想起服务。
 
 ---
 
