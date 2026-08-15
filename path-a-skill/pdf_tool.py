@@ -13,26 +13,30 @@ PDF 页面提取器 — DSH Skill 命令行工具
 """
 
 import argparse
+import io
+import json
 import os
 import sys
 import zipfile
-import io
 from pathlib import Path
+
+# 优先 pypdf，回退 PyPDF2（两者 API 兼容）
+try:
+    from pypdf import PdfReader, PdfWriter
+    PDF_LIB = "pypdf"
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+        PDF_LIB = "PyPDF2"
+    except ImportError:
+        PdfReader = None
+        PdfWriter = None
+        PDF_LIB = None
 
 
 def check_deps():
-    """检查并导入依赖。"""
-    try:
-        from pypdf import PdfReader, PdfWriter
-        return True, ("PdfReader", "PdfWriter")
-    except ImportError:
-        pass
-    try:
-        from PyPDF2 import PdfReader, PdfWriter
-        return True, ("PdfReader", "PdfWriter")
-    except ImportError:
-        pass
-    return False, None
+    """检查依赖是否可用。"""
+    return PDF_LIB is not None, PDF_LIB
 
 
 def parse_pages(spec: str, total_pages: int) -> list[int]:
@@ -65,8 +69,6 @@ def parse_pages(spec: str, total_pages: int) -> list[int]:
 
 def cmd_extract(args):
     """提取指定页面为新 PDF。"""
-    ModReader, ModWriter = check_deps()[1]
-    exec(f"from pypdf import {ModReader}, {ModWriter}", globals())
     reader = PdfReader(args.input, password=args.password or None)
     total = len(reader.pages)
     pages = parse_pages(args.pages, total)
@@ -93,8 +95,6 @@ def cmd_extract(args):
 
 def cmd_split(args):
     """拆分 PDF 为单页 ZIP。"""
-    ModReader, ModWriter = check_deps()[1]
-    exec(f"from pypdf import {ModReader}, {ModWriter}", globals())
     reader = PdfReader(args.input, password=args.password or None)
     total = len(reader.pages)
     out_dir = Path(args.output_dir or ".")
@@ -124,8 +124,6 @@ def cmd_split(args):
 
 def cmd_merge(args):
     """合并多个 PDF 为一个。"""
-    ModReader, ModWriter = check_deps()[1]
-    exec(f"from pypdf import {ModReader}, {ModWriter}", globals())
     writer = PdfWriter()
     total_pages = 0
 
@@ -153,27 +151,17 @@ def cmd_merge(args):
 
 def cmd_rotate(args):
     """旋转指定页面。"""
-    ModReader, ModWriter = check_deps()[1]
-    exec(f"from pypdf import {ModReader}, {ModWriter}", globals())
-    from pypdf import PageRotation
-
     reader = PdfReader(args.input, password=args.password or None)
     total = len(reader.pages)
     pages = parse_pages(args.pages, total)
     degrees = args.degrees or 90
 
-    rotation_map = {
-        90: PageRotation.DEGREES_90,
-        180: PageRotation.DEGREES_180,
-        270: PageRotation.DEGREES_270,
-    }
-    rot = rotation_map.get(degrees, PageRotation.DEGREES_90)
-
     writer = PdfWriter()
     for i, page in enumerate(reader.pages):
-        writer.add_page(page)
         if (i + 1) in pages:
-            writer.pages[i].rotate(rot)
+            # pypdf / PyPDF2 兼容：PageObject.rotate(angle)
+            page.rotate(degrees)
+        writer.add_page(page)
 
     output = args.output or _default_output(args.input, f"_旋转{degrees}度.pdf")
     with open(output, "wb") as f:
@@ -200,7 +188,6 @@ def _default_output(input_path: str, suffix: str) -> str:
 
 def json_output(**kwargs) -> str:
     """返回结构化 JSON 结果（便于 Agent 解析）。"""
-    import json
     return json.dumps(kwargs, ensure_ascii=False, indent=2)
 
 
@@ -251,7 +238,7 @@ def main():
         sys.exit(1)
 
     # 检查依赖
-    ok, _ = check_deps()
+    ok, lib = check_deps()
     if not ok:
         print(json_output(
             success=False,
