@@ -1,13 +1,17 @@
 # PDF Extractor DSH Plugin — Cordis 挂载配置（官方 patch 格式）
 #
-# 用法（在 deepseek-harness 源码根目录执行）：
-#   pnpm dsh web --patch ./path-c-cordis-plugin/cordis.yml
+# ⚠️ 最重要的一条规则（实测验证）：name 必须使用 file:// URL 形式的
+#    ABSOLUTE 绝对路径。不能写相对路径（DSH 会把相对路径解析到 profile 目录
+#    下，报 Cannot find module），也不能写裸的 Windows 路径（E:/... 会被 ESM
+#    loader 当作 scheme，报 ERR_UNSUPPORTED_ESM_URL_SCHEME）。
 #
-# 关键规则（DSH 运行时强制）：
-# - 顶层必须是 patch 列表（`- insert:` 为列表项），不是顶层 map
-# - 插件 name 必须使用 file:// URL：Windows 绝对路径 `E:/...` 会被 ESM loader
-#   当作 scheme 报 ERR_UNSUPPORTED_ESM_URL_SCHEME
-# - name 中的路径按你的本机部署位置修改
+# 安装到你的机器时，把下面 name 的路径替换为你本机插件的实际位置，例如：
+#   Windows:  file:///C:/Users/你的用户名/pdf-extractor-dsh-plugin/path-c-cordis-plugin/src/pdf-tool.ts
+#   macOS:    file:///Users/你的用户名/pdf-extractor-dsh-plugin/path-c-cordis-plugin/src/pdf-tool.ts
+#   Linux:    file:///home/你的用户名/pdf-extractor-dsh-plugin/path-c-cordis-plugin/src/pdf-tool.ts
+#
+# 挂载方式（在 deepseek-harness 源码根目录执行）：
+#   pnpm dsh web --patch <本仓库绝对路径>/path-c-cordis-plugin/cordis.yml
 - insert:
     - id: pdf-extractor-tool
-      name: 'file:///E:/deepseek-harness/scratch-plugin/src/pdf-tool.ts'
+      name: 'file:///CHANGE_ME/path/to/pdf-extractor-dsh-plugin/path-c-cordis-plugin/src/pdf-tool.ts'
