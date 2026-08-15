@@ -1,0 +1,11 @@
+# PDF Extractor DSH Plugin — npm 安装版 bundle
+#
+# 当插件通过 `dsh plugin --profile web add pdf-extractor-dsh-plugin`（npm）或
+# `dsh plugin add link:<path>`（link）安装时，由 package.json 的
+# `dsh.bundle.patch` 指向本文件。entry name 使用**包名**（与 DSH 官方插件
+# 一致），DSH 会从安装目录的 node_modules 解析到本包。
+#
+# 注意：本地 --patch 挂载请使用 cordis.yml（其中 name 为 file:// 绝对路径）。
+- insert:
+    - id: pdf-extractor-tool
+      name: 'pdf-extractor-dsh-plugin'
