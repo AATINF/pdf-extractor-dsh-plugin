@@ -9,11 +9,14 @@
  * - 享受 DSH 审批门（approval gate）、沙箱隔离、日志回放
  * - 卸载时自动回滚，无残留状态
  *
- * 挂载方式：
- *   pnpm dsh web --patch <harness-root>/pdf-extractor-plugin/cordis.yml
+ * 挂载方式（本仓库开发模式，在 deepseek-harness 源码根目录执行）：
+ *   pnpm dsh web --patch <本仓库绝对路径>/path-c-cordis-plugin/cordis.yml
+ *
+ * 注意：cordis.yml 中插件 name 必须为 file:// URL 形式的绝对路径（Windows 下
+ * 写 E:/... 会被 ESM loader 当作 scheme），并按你的本机部署位置修改该字段。
  *
  * 或安装到已有 DSH 实例：
- *   dsh plugin --profile web add link:<harness-root>/pdf-extractor-plugin
+ *   dsh plugin --profile web add link:<本仓库绝对路径>/path-c-cordis-plugin
  */
 
 import type { Context } from "@deepseek-ai/cordis";
