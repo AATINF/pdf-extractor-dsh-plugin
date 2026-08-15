@@ -43,6 +43,7 @@ def parse_pages(spec: str, total_pages: int) -> list[int]:
     """
     解析页码规格为有序列表。
     支持格式: "5", "3-7", "1,3,5-8,10", "*", "all"
+    非法 token（非数字、越界）会被安全忽略。
     """
     spec = spec.strip().lower()
     if spec in ("*", "all"):
@@ -51,16 +52,22 @@ def parse_pages(spec: str, total_pages: int) -> list[int]:
     result = []
     for part in spec.split(","):
         part = part.strip()
-        if "-" in part:
-            start, end = part.split("-", 1)
-            start, end = int(start), int(end)
-            if start < 1:
-                start = 1
-            if end > total_pages:
-                end = total_pages
-            result.extend(range(start, end + 1))
-        else:
-            result.append(int(part))
+        if not part:
+            continue
+        try:
+            if "-" in part:
+                start, end = part.split("-", 1)
+                start, end = int(start), int(end)
+                if start < 1:
+                    start = 1
+                if end > total_pages:
+                    end = total_pages
+                result.extend(range(start, end + 1))
+            else:
+                result.append(int(part))
+        except ValueError:
+            # 非数字 token（如 "1,a"）安全忽略，不中断
+            continue
 
     # 去重、排序、范围校验
     result = sorted(set(p for p in result if 1 <= p <= total_pages))
@@ -133,7 +140,8 @@ def cmd_merge(args):
         for page in reader.pages:
             writer.add_page(page)
 
-    output = args.output or "merged_output.pdf"
+    # 默认输出到第一个输入文件同目录（与 extract/split/rotate 行为一致）
+    output = args.output or _default_output(args.inputs[0], "_merged.pdf")
     with open(output, "wb") as f:
         writer.write(f)
 
@@ -159,8 +167,8 @@ def cmd_rotate(args):
     writer = PdfWriter()
     for i, page in enumerate(reader.pages):
         if (i + 1) in pages:
-            # pypdf / PyPDF2 兼容：PageObject.rotate(angle)
-            page.rotate(degrees)
+            # pypdf / PyPDF2 兼容：累加 rotation 属性（避免已弃用的 page.rotate）
+            page.rotation = (page.rotation + degrees) % 360
         writer.add_page(page)
 
     output = args.output or _default_output(args.input, f"_旋转{degrees}度.pdf")
