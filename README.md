@@ -40,6 +40,26 @@
 
 ---
 
+## 一分钟开始
+
+```bash
+# Path A（最快）：Python 一行提取
+pip install pypdf
+python path-a-skill/pdf_tool.py extract --input your.pdf --pages "1-3"
+
+# Path B：MCP Server（任意 MCP 客户端可接）
+cd path-b-mcp-server && npm install && node src/index.js
+
+# Path C：DSH 原生插件（需要 DSH 源码仓库，详见 Path C 章节）
+#   cp -r path-c-cordis-plugin <DSH仓库>/scratch-plugin-pdf && cd scratch-plugin-pdf && npm install
+#   修改 cordis.yml 的 name 为 file:// 绝对路径后：
+#   pnpm dsh web --patch ./scratch-plugin-pdf/cordis.yml
+```
+
+> 想快速体验完整功能？准备一个 PDF，按上面任一命令运行即可。三条路径提供相同的 4 个工具。
+
+---
+
 ## Path A：DSH Skill（推荐入门）
 
 最轻量的方式，只需 Python 环境。DSH 会话中加载 Skill 后，Agent 即可按指令调用 PDF 工具。
