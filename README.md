@@ -50,14 +50,15 @@
 # 1.（一次性）安装依赖
 pip install pypdf
 
-# 2. 把 SKILL.md 复制到 DSH 工作区（或在会话中直接指定路径加载）
-cp path-a-skill/SKILL.md <你的 DSH 工作区>/
+# 2. 把 SKILL.md 和 pdf_tool.py 一起复制到 DSH 工作区的同一目录
+#    （Agent 会在该目录执行 `python pdf_tool.py`，两个文件必须同目录）
+cp path-a-skill/SKILL.md path-a-skill/pdf_tool.py <你的 DSH 工作区>/
 ```
 
 3. 在 DSH 会话中加载并直接对话：
 
 ```
-/load-skill path-a-skill/SKILL.md
+/load-skill <你的 DSH 工作区>/SKILL.md
 "帮我把 report.pdf 的第 3-5 页提取出来"
 "把这个合同拆成每页一个文件"
 ```
@@ -65,11 +66,13 @@ cp path-a-skill/SKILL.md <你的 DSH 工作区>/
 Agent 会调用同目录的 `pdf_tool.py`：
 
 ```bash
-python path-a-skill/pdf_tool.py extract --input report.pdf --pages "3-5"
-python path-a-skill/pdf_tool.py split   --input contract.pdf --output-dir ./output
-python path-a-skill/pdf_tool.py merge   --inputs a.pdf b.pdf c.pdf --output merged.pdf
-python path-a-skill/pdf_tool.py rotate  --input scan.pdf --pages "2,4" --degrees 90
+python pdf_tool.py extract --input report.pdf --pages "3-5"
+python pdf_tool.py split   --input contract.pdf --output-dir ./output
+python pdf_tool.py merge   --inputs a.pdf b.pdf c.pdf --output merged.pdf
+python pdf_tool.py rotate  --input scan.pdf --pages "2,4" --degrees 90
 ```
+
+> 提示：`input` / `output` 建议使用**绝对路径**，避免 Agent 在不同工作目录下找不到文件。
 
 ### 核心文件
 - `path-a-skill/SKILL.md` — 模型可读的能力描述与使用指南
@@ -79,7 +82,7 @@ python path-a-skill/pdf_tool.py rotate  --input scan.pdf --pages "2,4" --degrees
 
 ## Path B：MCP Server
 
-标准 MCP 协议实现，任何支持 MCP 的客户端均可连接。DSH 的模型设置中可添加 MCP Server 接入。
+标准 MCP 协议实现，任何支持 MCP 的客户端均可连接。DSH 通过内置的 MCP 客户端桥接插件（`@deepseek-ai/dsh-mcp-client`）接入。
 
 ### 使用步骤
 
@@ -89,17 +92,27 @@ npm install
 node src/index.js        # 启动 MCP Server（stdio 模式，DSH 标准连接方式）
 ```
 
-### 在 DSH 中接入
-在 DSH Web UI 的 **模型 / MCP 设置**中添加一条 MCP Server，命令为：
+### 在 DSH 中接入（cordis.yml 配置）
 
-```
-node <本仓库绝对路径>/path-b-mcp-server/src/index.js
+DSH 的 MCP 接入不是可视化配置，而是在启动配置里声明 MCP server 插件实例。在 DSH 源码仓库的启动 patch（或 profile 的 `cordis.patch.yml`）中加入：
+
+```yaml
+- id: mcp-pdf
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: pdf
+    transport: stdio
+    command: node
+    args: ['<本仓库绝对路径>/path-b-mcp-server/src/index.js']
+    cwd: '<本仓库绝对路径>/path-b-mcp-server'
 ```
 
-连接后 Agent 即可调用 `extract_pages` / `split_pdf` / `merge_pdfs` / `rotate_pages` 四个工具。
+然后用该配置启动 `pnpm dsh web --patch <该配置 yml>`。连接后，Agent 会看到 **`mcp__pdf__extract_pages` / `mcp__pdf__split_pdf` / `mcp__pdf__merge_pdfs` / `mcp__pdf__rotate_pages`** 四个工具。
+
+> **重要**：所有文件路径必须使用**绝对路径**（`input_path` / `output_path` 等），MCP server 的工作目录与你的对话目录不同，相对路径会报文件不存在。
 
 > 说明：本实现提供 stdio 传输（本地进程间通信，也是 DSH 的标准 MCP 接入方式）。
-> 如需远程访问，请通过 MCP 客户端自身的远程代理（如 `mcp-remote`）包装。
+> 其他 MCP 客户端（Claude / Cursor 等）也可直接连接本 server。
 
 ### 暴露的工具
 
@@ -127,25 +140,27 @@ node <本仓库绝对路径>/path-b-mcp-server/src/index.js
 # 1.（一次性）把插件放入 DSH 源码仓库内，并安装其依赖
 cd <deepseek-harness 源码根目录>
 cp -r <本仓库>/path-c-cordis-plugin ./scratch-plugin-pdf
-cd scratch-plugin-pdf && npm install          # 安装 pdf-lib / jszip（peer 依赖按 npm 提示处理）
+cd scratch-plugin-pdf && npm install          # 安装 pdf-lib / jszip
 cd ..
 
 # 2. 修改 ./scratch-plugin-pdf/cordis.yml 中插件 name 的路径为你的本机绝对路径
-#    （必须是 file:// 形式，见下方注意事项）
+#    （必须是 file:// 形式；已实测确认相对路径不可用，见下方注意事项）
 
 # 3. 启动
 pnpm dsh web --patch ./scratch-plugin-pdf/cordis.yml
 ```
 
-### 方法二：link 安装到已有实例
+### 方法二：link 安装到已有实例（已实测）
 
 ```bash
 dsh plugin --profile web add link:<本仓库绝对路径>/path-c-cordis-plugin
 ```
 
+> 实测说明：`link:` 安装本身可用（pnpm 层面安装成功），且插件包的 `dsh.bundle` 声明需为对象格式（`"dsh": {"bundle": {"patch": "./cordis.yml"}}`）才能被 DSH 识别为 profile 层。安装后仍需按方法一修改 `cordis.yml` 的 `name` 为 file:// 绝对路径（link 与 patch 的路径解析基准都是 profile 目录，相对路径不可用）。未改动 name 前插件不会被加载。
+
 ### 挂载注意事项（实测验证，务必遵守）
 
-- `cordis.yml` 的插件 `name` **必须使用 `file:///` 形式的绝对路径**——在 Windows 上直接写 `E:/...` 会被 ESM loader 当作 URL scheme 报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。请按你的本机部署路径修改。
+- `cordis.yml` 的插件 `name` **必须使用 `file:///` 形式的绝对路径**——相对路径会被解析到 profile 目录（`Cannot find module`），Windows 裸路径 `E:/...` 会被 ESM loader 当作 scheme（`ERR_UNSUPPORTED_ESM_URL_SCHEME`）。请按你的本机部署路径修改。
 - `output.schema` 为 object 时**必须显式声明 `additionalProperties: true|false`**（DSH 运行时强制，否则报 `UNSUPPORTED_SCHEMA`）。
 - `execute` 必须返回与 `output.schema` 匹配的**对象**（返回 `JSON.stringify()` 字符串会被判为非法值）。
 - 插件依赖 DSH monorepo 内部包，**建议放在 DSH 源码仓库内**（如 `scratch-plugin/`）再挂载；第三方依赖（`pdf-lib`、`jszip`）在插件目录独立安装。
@@ -162,8 +177,10 @@ dsh plugin --profile web add link:<本仓库绝对路径>/path-c-cordis-plugin
 ## 快速开始（30 秒最小体验，Path A）
 
 ```bash
-# 1. 准备一个测试 PDF（任选其一）
-curl -L -o sample.pdf "https://www.w3.org/WHO/PDF/HelloWorld.pdf"   # 或使用你自己的任意 PDF
+# 1. 准备一个测试 PDF（任选其一，均已验证可用）
+curl -L -o sample.pdf "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+# 备选：https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf（14 页）
+# 或直接使用你自己的任意 PDF
 
 # 2. 安装依赖并直接调用
 pip install pypdf
@@ -180,6 +197,9 @@ python path-a-skill/pdf_tool.py extract --input sample.pdf --pages "1"
 |---|---|
 | 提示 `Cannot find module '@deepseek-ai/cordis'` | Path C 插件必须放在 DSH 源码仓库内（能解析到 monorepo 内部包）再挂载 |
 | 报 `ERR_UNSUPPORTED_ESM_URL_SCHEME` | cordis.yml 的 name 用了 `E:/...` 裸路径，改为 `file:///E:/...` |
+| 报 `Cannot find module '...\profiles\web\src\pdf-tool.ts'` | cordis.yml 的 name 用了相对路径（DSH 相对路径解析到 profile 目录），必须改为 file:// 绝对路径 |
+| link 安装成功但工具没出现 | ① 插件包 package.json 需含 `"dsh": {"bundle": {"patch": "./cordis.yml"}}`；② cordis.yml 的 name 需为 file:// 绝对路径（未改则插件不加载） |
+| 如何让 DSH 接入 Path B（MCP） | 在启动配置里声明 `@deepseek-ai/dsh-mcp-client` 插件实例（见 Path B 章节的 cordis.yml 示例），工具名带 `mcp__pdf__` 前缀 |
 | 报 `UNSUPPORTED_SCHEMA` | `output.schema` 的 object 类型缺少 `additionalProperties: true/false` |
 | 文件加密打不开 | 用 `--password` / `password` 参数传入密码 |
 | 页码超出范围 | 工具返回 `PageOutOfRangeError` 并给出有效范围 `1-N` |
