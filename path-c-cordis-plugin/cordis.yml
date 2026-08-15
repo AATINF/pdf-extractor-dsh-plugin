@@ -1,12 +1,13 @@
-# PDF Extractor DSH Plugin — Cordis 挂载配置
+# PDF Extractor DSH Plugin — Cordis 挂载配置（官方 patch 格式）
 #
-# 使用方式（开发模式）：
-#   cd <deepseek-harness 仓库根目录>
-#   pnpm dsh web --patch /absolute/path/to/this/cordis.yml
+# 用法（在 deepseek-harness 源码根目录执行）：
+#   pnpm dsh web --patch ./path-c-cordis-plugin/cordis.yml
 #
-# 使用方式（安装到已有实例）：
-#   dsh plugin --profile web add link:/absolute/path/to/parent/directory
-
-insert:
-  - id: pdf-extractor-tool
-    name: ./src/pdf-tool.ts
+# 关键规则（DSH 运行时强制）：
+# - 顶层必须是 patch 列表（`- insert:` 为列表项），不是顶层 map
+# - 插件 name 必须使用 file:// URL：Windows 绝对路径 `E:/...` 会被 ESM loader
+#   当作 scheme 报 ERR_UNSUPPORTED_ESM_URL_SCHEME
+# - name 中的路径按你的本机部署位置修改
+- insert:
+    - id: pdf-extractor-tool
+      name: 'file:///E:/deepseek-harness/scratch-plugin/src/pdf-tool.ts'
